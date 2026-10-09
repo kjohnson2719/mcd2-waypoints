@@ -7,12 +7,16 @@
       <NeoRuneInstall>false</NeoRuneInstall>        only build, don't copy into the game
   -->
   <PropertyGroup>
+    <!-- The game on this machine (Steam). Builds don't need it, only installing does. -->
     <NeoRuneGameDir>C:\Program Files (x86)\Steam\steamapps\common\Minecraft Dungeons II</NeoRuneGameDir>
+    <!-- On the build server (GitHub Actions sets CI=true) there's no game to install into. -->
+    <NeoRuneInstall Condition="'$(CI)' == 'true'">false</NeoRuneInstall>
     <!-- Shown in the Mods tab of the game's settings (Blueprint Loader 2.0). \n in the description is a line break. -->
     <NeoRuneModTitle>Waypoints</NeoRuneModTitle>
+    <!-- Releases take their version from the tag (v1.2 -> 1.2): see .github/workflows/build.yml. -->
     <Version>0.1</Version>
     <NeoRuneModAuthor>Kyle</NeoRuneModAuthor>
-    <NeoRuneModDescription>Set a waypoint and follow the guide to it: a route on the ground, on the minimap, and an arrow when it's off screen.\nF6: set the waypoint under the mouse (on the minimap or the ground). F7: clear it. Pinging also sets it.</NeoRuneModDescription>
+    <NeoRuneModDescription>Set a waypoint on the map and follow the guide to it, like a quest: the game's guidance line, the route on the map and the minimap, its distance and an arrow when it's off screen.\nOn the map: left stick click (controller) or F6 at the crosshair or cursor; on a marker it snaps to it. Again on the waypoint removes it.\nIn the world: left stick click or G shows the path; F6 sets a waypoint under the mouse; F7 clears it.\nDuring soulstorms, the generators show on screen, on the minimap and on the map.</NeoRuneModDescription>
   </PropertyGroup>
   <ItemGroup>
     <!-- The icon generator isn't part of the mod. -->

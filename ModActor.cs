@@ -84,7 +84,13 @@ public struct SavedCalibration
 [ModSetting.Heading("Soulstorms")]
 [ModSetting.Toggle("generators", "Show where the generators are (on screen, the minimap and the map)", Default = true)]
 [ModSetting.Heading("Troubleshooting")]
+// Diagnostics: on in development builds (dotnet build), off in releases (Release builds), where writing the log every
+// few seconds would only cost players.
+#if DEBUG
 [ModSetting.Toggle("debug", "Write diagnostics to the mod's log", Default = true)]
+#else
+[ModSetting.Toggle("debug", "Write diagnostics to the mod's log", Default = false)]
+#endif
 public class ModActor : AActor, IModSettings
 {
     const double ArriveDistance = 350;
@@ -108,7 +114,11 @@ public class ModActor : AActor, IModSettings
     public bool ShowQuestLine;
     public bool ShowGenerators = true;
     public FLinearColor Colour = new FLinearColor { R = 1, G = 0.644f, B = 0.068f, A = 1 };
+#if DEBUG
     public bool Debug = true;
+#else
+    public bool Debug = false;
+#endif
     FKey setKey = new FKey { KeyName = "F6" };
     FKey setPadKey = new FKey { KeyName = "Gamepad_LeftThumbstick" };
     FKey clearKey = new FKey { KeyName = "F7" };
@@ -383,7 +393,11 @@ public class ModActor : AActor, IModSettings
         showKey = new FKey { KeyName = "G" };
         showPadKey = new FKey { KeyName = "Gamepad_LeftThumbstick" };
         Colour = ModSettings.ToColour("#FFD24A");
+#if DEBUG
         Debug = true;
+#else
+        Debug = false;
+#endif
         setKey = new FKey { KeyName = "F6" };
         setPadKey = new FKey { KeyName = "Gamepad_LeftThumbstick" };
         clearKey = new FKey { KeyName = "F7" };

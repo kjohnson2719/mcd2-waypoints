@@ -1,6 +1,18 @@
 # Waypoints (Minecraft Dungeons II)
 
-Set a waypoint and follow a guide to it, like in most open world games:
+A mod for Minecraft Dungeons II. Set a waypoint and follow a guide to it, like in most open world games.
+
+## Install
+
+1. Install [Blueprint Loader](https://www.nexusmods.com/minecraftdungeons2/mods/2).
+2. Download `Waypoints-<version>.zip` from the [latest release](https://github.com/kjohnson2719/mcd2-waypoints/releases/latest).
+3. Extract its `Waypoints` folder into the game's mods folder, so you have `~mods\Waypoints\Waypoints_P.pak`:
+   - Steam: `...\steamapps\common\Minecraft Dungeons II\Dungeons\Content\Paks\~mods`
+   - Xbox app: `...\Minecraft Dungeons II\Content\Dungeons\Content\Paks\~mods`
+
+Settings and keys are in the game's Settings, Mods tab. To uninstall, delete the `Waypoints` folder.
+
+## What it does
 
 - **Set it on the map screen:** open the map and press **F6**, or **click the left stick** on a controller. The
   waypoint goes under the cursor (mouse) or the crosshair (controller): exactly on a marker (a dungeon, a station...) when
@@ -20,7 +32,6 @@ Set a waypoint and follow a guide to it, like in most open world games:
 - **On the map screen,** a "Set Waypoint" / "Remove Waypoint" hint sits next to the game's own control hints, with the
   game's icon for the button. The game's guidance keys (whatever they're bound to) set the waypoint on the map and show
   the path in the world.
-
 - **Soulstorms:** while one is on, its generators show on screen (with their distance, or an arrow at the edge), on
   the minimap and on the map, where a waypoint can be snapped to them.
 
@@ -43,9 +54,23 @@ Requirements: Windows, the .NET 10 SDK, and the NeoRune tool (`dotnet tool insta
 dotnet build                 # compile, pack, and install into Paks\~mods\Waypoints (close the game first)
 neorune log Waypoints        # what the mod wrote to its log (add --follow while playing)
 neorune doctor               # check the setup
-neorune pack                 # zip a release for Nexus
+neorune pack                 # zip a release (Release build: diagnostics off by default)
 node tools/make-icons.js     # regenerate Images/*.png
 ```
+
+Development builds (`dotnet build`) write diagnostics to the mod's log by default; release builds don't (the setting
+is in the Mods tab either way).
+
+### Releasing
+
+GitHub Actions builds the mod on every push. Pushing a version tag publishes a release with the zip:
+
+```
+git tag v1.0
+git push origin v1.0
+```
+
+The tag sets the mod's version (shown in the Mods tab and in the zip's name).
 
 | File | What it does |
 | --- | --- |
@@ -63,3 +88,7 @@ On the map screen, keys reach the mod through the game's own key tracker (`Keybo
 map uses for keyboard panning). The usual in-game key listeners stop while a menu is open, so they can't be used there.
 Map positions come from the game's `ClientMapsSubsystem.GetNormalizedPositionInRegion`, checked against the game's
 player marker.
+
+## License
+
+[MIT](LICENSE).
