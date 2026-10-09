@@ -1,0 +1,21 @@
+<Project Sdk="NeoRune.Sdk/1.0.0">
+  <!--
+    dotnet build   compiles the mod and installs it into the game's Paks\~mods\Waypoints folder.
+    Close the game before building: it locks the mod files while running.
+    Optional settings:
+      <NeoRuneModName>Waypoints</NeoRuneModName>        folder name under Content/Mods (default: project name)
+      <NeoRuneInstall>false</NeoRuneInstall>        only build, don't copy into the game
+  -->
+  <PropertyGroup>
+    <NeoRuneGameDir>C:\Program Files (x86)\Steam\steamapps\common\Minecraft Dungeons II</NeoRuneGameDir>
+    <!-- Shown in the Mods tab of the game's settings (Blueprint Loader 2.0). \n in the description is a line break. -->
+    <NeoRuneModTitle>Waypoints</NeoRuneModTitle>
+    <Version>0.1</Version>
+    <NeoRuneModAuthor>Kyle</NeoRuneModAuthor>
+    <NeoRuneModDescription>Set a waypoint and follow the guide to it: a route on the ground, on the minimap, and an arrow when it's off screen.\nF6: set the waypoint under the mouse (on the minimap or the ground). F7: clear it. Pinging also sets it.</NeoRuneModDescription>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- The icon generator isn't part of the mod. -->
+    <None Remove="tools/**" />
+  </ItemGroup>
+</Project>
