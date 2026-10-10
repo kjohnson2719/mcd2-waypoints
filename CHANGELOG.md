@@ -1,8 +1,8 @@
 # Changelog
 
-## 1.1
+## 1.1 (2026-10-09)
 
-- Tells you when a new version is out (asks GitHub when the game starts, at most every 6 hours; a setting turns it off).
+- Tells you when a new version is out, in a notice made of the game's own panel (asks GitHub when the game starts, at most every 6 hours; a setting turns it off). With several of these mods installed, one notice lists them all.
 - Built on the shared mod kit (ModKit): no change in how it plays.
 
 ## 1.0 (2026-10-09)
