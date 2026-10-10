@@ -14,7 +14,7 @@
     <!-- Shown in the Mods tab of the game's settings (Blueprint Loader 2.0). \n in the description is a line break. -->
     <NeoRuneModTitle>Waypoints</NeoRuneModTitle>
     <!-- Releases take their version from the tag (v1.2 -> 1.2): see .github/workflows/build.yml. -->
-    <Version>1.0</Version>
+    <Version>1.1</Version>
     <NeoRuneModAuthor>Kyle</NeoRuneModAuthor>
     <NeoRuneModDescription>Set a waypoint on the map and follow the guide to it, like a quest: the game's guidance line, the route on the map and the minimap, its distance and an arrow when it's off screen.\nOn the map: left stick click (controller) or F6 at the crosshair or cursor; on a marker it snaps to it. Again on the waypoint removes it.\nIn the world: left stick click or G shows the path; F6 sets a waypoint under the mouse; F7 clears it.\nDuring soulstorms, the generators show on screen, on the minimap and on the map.</NeoRuneModDescription>
   </PropertyGroup>
