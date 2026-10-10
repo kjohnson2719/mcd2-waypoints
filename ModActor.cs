@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using ModKit;
 using NeoRune;
 using UE.Angelscript;
 using UE.AngelscriptEnhancedInput;
@@ -83,6 +84,8 @@ public struct SavedCalibration
 [ModSetting.Colour("colour", "Colour", Default = "#FFD24A")]
 [ModSetting.Heading("Soulstorms")]
 [ModSetting.Toggle("generators", "Show where the generators are (on screen, the minimap and the map)", Default = true)]
+[ModSetting.Heading("Updates")]
+[ModSetting.Toggle("updates", "Tell me when a new version is out (checks GitHub when the game starts)", Default = true)]
 [ModSetting.Heading("Troubleshooting")]
 // Diagnostics: on in development builds (dotnet build), off in releases (Release builds), where writing the log every
 // few seconds would only cost players.
@@ -99,7 +102,6 @@ public class ModActor : AActor, IModSettings
     const double Horizon = 12000;       // cm: how far ahead routes are found on the nav mesh (it's only loaded near the player)
     const double SnapRange = 8000;      // cm of a straight route that gets put on the ground
     const double GroundRange = 15000;   // cm: close enough for the ground under a waypoint to be loaded
-    const double KeyGap = 0.2;          // seconds without input before a key counts as pressed again
     const string GuidanceClass = "/Game/Spicewood/Cues/Abilities/GCN_ShowGuidance.GCN_ShowGuidance_C";
 
     // Settings, with the same defaults as above (Blueprint Loader only sends the ones the player changed).
@@ -113,6 +115,7 @@ public class ModActor : AActor, IModSettings
     public int TrailStyle;
     public bool ShowQuestLine;
     public bool ShowGenerators = true;
+    public bool CheckUpdates = true;
     public FLinearColor Colour = new FLinearColor { R = 1, G = 0.644f, B = 0.068f, A = 1 };
 #if DEBUG
     public bool Debug = true;
@@ -130,13 +133,11 @@ public class ModActor : AActor, IModSettings
     // left stick click). On the map screen, a menu, those don't hear anything: there the game's own key tracker does,
     // switched on only while the map is open, as it keeps the keys it tracks from the game's menus (found in game:
     // the inventory couldn't sort with left stick click while it was always on).
-    UKeyboardDirectionTickWrapper? keyTracker;
-    List<FKey> trackedKeys = new();
+    MenuKeys? mapKeys;
     KeyListener? setListener;
     KeyListener? showListener;
     KeyListener? showPadListener;
     List<KeyListener> guidanceListeners = new();
-    bool trackerOn;
     KeyListener? clearListener;
     // The keys the game binds to its guidance action (left stick click, and whatever it is on the keyboard): they set the
     // waypoint on the map and show the path in the world too. The HUD's guidance slot also gives the button's icon.
@@ -154,10 +155,7 @@ public class ModActor : AActor, IModSettings
     UInputAction? padIconAction;
     bool loggedNoGuidanceAction;
     bool guidanceKeysKnown;
-    List<FKey> pressKeys = new();
-    List<double> pressTimes = new();
     double lastAction = -100;
-    int loggedKeyEvents;
 
     // The waypoint, and the route to it from where the player was at pathFrom.
     public bool HasWaypoint;
@@ -260,6 +258,13 @@ public class ModActor : AActor, IModSettings
         level = World.LevelName(this);
         LoadCalibrations();
         Timer.Start(this, nameof(TryStart), 0.5f, true);
+        // A moment in, once the settings have come (also on the main menu).
+        Timer.Start(this, nameof(StartUpdateCheck), 2f, false);
+    }
+
+    void StartUpdateCheck()
+    {
+        if (CheckUpdates) UpdateCheck.Start(this);
     }
 
     /// <summary>Waits for the player's character (there's none on the main menu), then starts everything once.</summary>
@@ -304,8 +309,7 @@ public class ModActor : AActor, IModSettings
 
     protected override void ReceiveEndPlay(EEndPlayReason EndPlayReason)
     {
-        keyTracker?.SetIsEnabled(false);
-        trackerOn = false;
+        mapKeys?.SetOn(false);
         SaveCalibration();
     }
 
@@ -325,11 +329,7 @@ public class ModActor : AActor, IModSettings
             worldMaps[i].Refresh();
             if (worldMaps[i].IsOpen()) mapOpen = true;
         }
-        if (keyTracker != null && mapOpen != trackerOn)
-        {
-            trackerOn = mapOpen;
-            keyTracker.SetIsEnabled(mapOpen);
-        }
+        mapKeys?.SetOn(mapOpen);
         trail?.Refresh(mapOpen);
         generatorOverlay?.Refresh(mapOpen);
         UpdateMapHint();
@@ -354,6 +354,7 @@ public class ModActor : AActor, IModSettings
             case "trailStyle": TrailStyle = ModSettings.ToInt(value); break;
             case "questLine": ShowQuestLine = ModSettings.ToBool(value); break;
             case "generators": ShowGenerators = ModSettings.ToBool(value); break;
+            case "updates": CheckUpdates = ModSettings.ToBool(value); break;
             case "colour": Colour = ModSettings.ToColour(value); break;
             case "debug": Debug = ModSettings.ToBool(value); break;
         }
@@ -390,6 +391,7 @@ public class ModActor : AActor, IModSettings
         TrailStyle = 0;
         ShowQuestLine = false;
         ShowGenerators = true;
+        CheckUpdates = true;
         showKey = new FKey { KeyName = "G" };
         showPadKey = new FKey { KeyName = "Gamepad_LeftThumbstick" };
         Colour = ModSettings.ToColour("#FFD24A");
@@ -435,71 +437,30 @@ public class ModActor : AActor, IModSettings
             guidanceListeners.Add(listener);
         }
 
-        if (keyTracker == null)
+        if (mapKeys == null)
         {
-            keyTracker = UKeyboardDirectionTickWrapper.Create();
-            var localPlayer = trail?.GetOwningLocalPlayer();
-            if (keyTracker != null && localPlayer != null)
-            {
-                keyTracker.SetOwningPlayer(localPlayer);
-                keyTracker.OnInputPerformedThisTick = OnTrackedKey;
-                keyTracker.SetIsEnabled(false);
-                trackerOn = false;
-            }
+            mapKeys = MenuKeys.Create(this);
+            if (mapKeys != null) mapKeys.Pressed += OnMapKey;
             else if (Debug) Log.Write("keys: couldn't set up the game's key tracker, keys won't work on the map screen");
         }
-        if (keyTracker == null) return;
-        foreach (var key in trackedKeys) keyTracker.UntrackKey(key);
-        trackedKeys = new List<FKey>();
-        Track(setKey);
-        Track(setPadKey);
-        Track(clearKey);
-        Track(clearPadKey);
-        foreach (var key in guidanceKeys) Track(key);
+        if (mapKeys == null) return;
+        mapKeys.Clear();
+        mapKeys.Track(setKey);
+        mapKeys.Track(setPadKey);
+        mapKeys.Track(clearKey);
+        mapKeys.Track(clearPadKey);
+        foreach (var key in guidanceKeys) mapKeys.Track(key);
     }
 
-    void Track(FKey key)
+    /// <summary>A new press of one of the map screen's keys (the kit's MenuKeys hears them while the map is open).</summary>
+    void OnMapKey()
     {
-        // An unbound key is "None" (an empty name can't be compiled: NeoRune 1.0 can't write empty names).
-        if (keyTracker == null || key.KeyName == "None") return;
-        foreach (var tracked in trackedKeys)
-            if (UKismetInputLibrary.EqualEqual_KeyKey(tracked, key)) return;
-        keyTracker.TrackKey(key);
-        trackedKeys.Add(key);
-    }
-
-    /// <summary>
-    /// The game's key tracker reports tracked keys while they're down (also on the map screen). A key counts as pressed
-    /// when it's reported after a short gap.
-    /// </summary>
-    void OnTrackedKey(float DeltaTime, FKey Key, EInputEvent InputEvent)
-    {
-        if (Debug && loggedKeyEvents < 12)
-        {
-            loggedKeyEvents++;
-            Log.Write($"keys: tracker reported {Key.KeyName} {InputEvent}");
-        }
-        if (InputEvent == EInputEvent.IE_Released || !mapOpen) return;
-        if (!NewPress(Key, World.RealTime(this))) return;
-        bool isSet = IsGuidanceKey(Key) || UKismetInputLibrary.EqualEqual_KeyKey(Key, setKey) || UKismetInputLibrary.EqualEqual_KeyKey(Key, setPadKey);
-        bool isClear = UKismetInputLibrary.EqualEqual_KeyKey(Key, clearKey) || UKismetInputLibrary.EqualEqual_KeyKey(Key, clearPadKey);
-        if (isSet) OnSetPressed(UKismetInputLibrary.Key_IsGamepadKey(Key));
+        if (mapKeys == null || !mapOpen) return;
+        var key = mapKeys.LastKey;
+        bool isSet = IsGuidanceKey(key) || UKismetInputLibrary.EqualEqual_KeyKey(key, setKey) || UKismetInputLibrary.EqualEqual_KeyKey(key, setPadKey);
+        bool isClear = UKismetInputLibrary.EqualEqual_KeyKey(key, clearKey) || UKismetInputLibrary.EqualEqual_KeyKey(key, clearPadKey);
+        if (isSet) OnSetPressed(UKismetInputLibrary.Key_IsGamepadKey(key));
         else if (isClear) OnClearPressed();
-    }
-
-    /// <summary>Whether a report of a key is a new press: the first after a short gap (the tracker reports held keys every tick).</summary>
-    bool NewPress(FKey key, double now)
-    {
-        for (int i = 0; i < pressKeys.Count; i++)
-        {
-            if (!UKismetInputLibrary.EqualEqual_KeyKey(pressKeys[i], key)) continue;
-            bool pressed = now - pressTimes[i] > KeyGap;
-            pressTimes[i] = now;
-            return pressed;
-        }
-        pressKeys.Add(key);
-        pressTimes.Add(now);
-        return true;
     }
 
     void OnSetKey() => OnSetPressed(false);

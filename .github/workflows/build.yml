@@ -23,6 +23,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # The mod kit (shared code, compiled in): the .csproj looks for it in a ModKit folder here.
+      - name: Check out the mod kit
+        uses: actions/checkout@v4
+        with:
+          repository: kjohnson2719/mcd2-modkit
+          path: ModKit
+
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "10.0.x"

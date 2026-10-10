@@ -1,0 +1,112 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<!--
+  Touches up a screenshot for the Nexus page at 1920x1080: crops it to 16:9, a little more contrast and colour, a gentle
+  sharpen (it's scaled up slightly), and for the annotated versions, callouts. Rendered by render-shots.ps1.
+  Query: ?shot=map|world&notes=1
+-->
+<link href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@500;700&display=block" rel="stylesheet">
+<style>
+  html, body { margin: 0; background: #000; overflow: hidden; }
+  #frame { position: relative; width: 1920px; height: 1080px; overflow: hidden; }
+  .shot { position: absolute; filter: url(#sharpen) contrast(1.06) saturate(1.12) brightness(1.02); }
+  .callout { position: absolute; font-family: 'Pixelify Sans', monospace; font-weight: 700; font-size: 30px; color: #fff6dc;
+             background: rgba(24, 18, 9, 0.88); border: 3px solid #ffd24a; border-radius: 10px; padding: 10px 18px; white-space: nowrap;
+             box-shadow: 0 6px 18px rgba(0,0,0,0.5); }
+  .callout small { display: block; font-weight: 500; font-size: 22px; color: #f1d88a; margin-top: 2px; }
+  .ring { position: absolute; border: 4px solid #ffd24a; border-radius: 14px; box-shadow: 0 0 0 3px rgba(24,18,9,0.7), 0 0 24px rgba(255,210,74,0.55); }
+  .inset { position: absolute; overflow: hidden; border: 4px solid #ffd24a; border-radius: 14px; box-shadow: 0 0 0 3px rgba(24,18,9,0.75), 0 10px 30px rgba(0,0,0,0.6); }
+  svg.lines { position: absolute; inset: 0; pointer-events: none; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <filter id="sharpen"><feConvolveMatrix order="3" kernelMatrix="0 -0.3 0 -0.3 2.2 -0.3 0 -0.3 0" preserveAlpha="true"/></filter>
+</svg>
+<div id="frame"></div>
+<script>
+const params = new URLSearchParams(location.search);
+const notes = params.get('notes') === '1';
+// Each shot: its source, and the 16:9 part of it to keep (in source pixels).
+const shots = {
+  map:   { src: 'source/map.webp',   w: 2000, h: 1061, crop: { x: 180, y: 20, w: 1820, h: 1024 } },
+  world: { src: 'source/world.webp', w: 2000, h: 1063, crop: { x: 110, y: 0, w: 1890, h: 1063 } },
+};
+const shot = shots[params.get('shot') || 'map'];
+const frame = document.getElementById('frame');
+const scale = 1920 / shot.crop.w;
+// A source point on the 1920x1080 frame.
+const at = (x, y) => [(x - shot.crop.x) * scale, (y - shot.crop.y) * scale];
+
+function addImage(parent, s, left, top) {
+  const img = document.createElement('img');
+  img.src = shot.src;
+  img.className = 'shot';
+  img.style.width = shot.w * s + 'px';
+  img.style.height = shot.h * s + 'px';
+  img.style.left = left + 'px';
+  img.style.top = top + 'px';
+  parent.appendChild(img);
+}
+addImage(frame, scale, -shot.crop.x * scale, -shot.crop.y * scale);
+if (params.get('shot') === 'map') {
+  // The crop cuts "INVENTORY" in the top bar: cover what's left of it with the bar's colour.
+  const cover = document.createElement('div');
+  Object.assign(cover.style, { position: 'absolute', left: '0px', top: '0px', width: '96px', height: '62px', background: '#000' });
+  frame.appendChild(cover);
+}
+
+function el(cls, style, html) {
+  const d = document.createElement('div');
+  d.className = cls;
+  Object.assign(d.style, style);
+  if (html) d.innerHTML = html;
+  frame.appendChild(d);
+  return d;
+}
+function ring(x0, y0, x1, y1, pad) {
+  const [a, b] = at(x0, y0), [c, d] = at(x1, y1);
+  return el('ring', { left: a - pad + 'px', top: b - pad + 'px', width: c - a + 2 * pad + 'px', height: d - b + 2 * pad + 'px' });
+}
+function line(x0, y0, x1, y1) {
+  const svg = document.querySelector('svg.lines') || (() => {
+    const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    s.setAttribute('class', 'lines'); s.setAttribute('width', 1920); s.setAttribute('height', 1080);
+    frame.appendChild(s); return s;
+  })();
+  for (const [w, c] of [[8, 'rgba(24,18,9,0.8)'], [4, '#ffd24a']]) {
+    const l = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    l.setAttribute('x1', x0); l.setAttribute('y1', y0); l.setAttribute('x2', x1); l.setAttribute('y2', y1);
+    l.setAttribute('stroke', c); l.setAttribute('stroke-width', w); l.setAttribute('stroke-linecap', 'round');
+    svg.appendChild(l);
+  }
+}
+
+if (notes && params.get('shot') === 'map') {
+  // The "Set Waypoint" hint, the route, and where it ends.
+  ring(888, 985, 1078, 1030, 8);
+  el('callout', { left: '560px', top: '860px' }, 'Set Waypoint<small>F6 / left stick click, at the cursor or crosshair</small>');
+  line(830, 945, 870, 1000);
+  ring(978, 548, 1030, 602, 10);
+  el('callout', { left: '890px', top: '640px' }, 'Snaps onto markers<small>dungeons, stations, soulstorms...</small>');
+  line(905, 640, 875, 610);
+  el('callout', { left: '712px', top: '300px' }, 'Your route on the map');
+  line(712, 330, 660, 330);
+}
+if (notes && params.get('shot') === 'world') {
+  // An enlarged copy of the minimap, and the distance at the screen's edge.
+  const inset = el('inset', { left: '1150px', top: '410px', width: '450px', height: '410px' });
+  const zoom = 1.8, cx = 1808, cy = 142;   // the minimap's middle, in source pixels
+  addImage(inset, zoom, 225 - cx * zoom, 205 - cy * zoom);
+  ring(1688, 20, 1930, 266, 6);
+  line(1597, 210, 1480, 414);
+  el('callout', { left: '1150px', top: '836px' }, 'Route and waypoint on the minimap');
+  ring(1938, 152, 1984, 182, 8);
+  el('callout', { left: '1612px', top: '420px' }, "Distance + arrow<small>when it's off screen</small>");
+  line(1884, 420, 1886, 202);
+}
+</script>
+</body>
+</html>

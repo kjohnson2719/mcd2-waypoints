@@ -1,0 +1,171 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<!-- The Nexus page header (1300x372). Render: see render-header.ps1. All drawn here: no game assets. -->
+<link href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@500;700&display=block" rel="stylesheet">
+<style>
+  html, body { margin: 0; padding: 0; background: #1a1712; overflow: hidden; }
+  #banner { position: relative; width: 1300px; height: 372px; overflow: hidden; }
+  canvas { position: absolute; inset: 0; image-rendering: pixelated; }
+  .text { position: absolute; left: 70px; top: 0; height: 372px; display: flex; flex-direction: column; justify-content: center; }
+  .kicker { font-family: 'Pixelify Sans', monospace; font-weight: 500; font-size: 22px; letter-spacing: 3px; color: #f1d88a; text-transform: uppercase;
+            text-shadow: 2px 2px 0 #1b140b; margin-bottom: 4px; }
+  h1 { font-family: 'Pixelify Sans', monospace; font-weight: 700; font-size: 112px; line-height: 1; margin: 0; color: #fff6dc; letter-spacing: 4px;
+       text-shadow: 0 6px 0 #6b4a1c, 6px 6px 0 #2a1d0c, 0 0 28px rgba(0,0,0,0.55); }
+  .tag { font-family: 'Pixelify Sans', monospace; font-weight: 500; font-size: 30px; color: #fff1c8; margin-top: 18px;
+         text-shadow: 2px 2px 0 #1b140b, 0 0 14px rgba(0,0,0,0.6); }
+</style>
+</head>
+<body>
+<div id="banner">
+  <canvas id="c" width="1300" height="372"></canvas>
+  <div class="text">
+    <div class="kicker">A Minecraft Dungeons II mod</div>
+    <h1>WAYPOINTS</h1>
+    <div class="tag">Set a waypoint. Follow the guide.</div>
+  </div>
+</div>
+<script>
+const W = 1300, H = 372, B = 8;   // canvas size, block size
+const ctx = document.getElementById('c').getContext('2d');
+
+// Seeded value noise, a few octaves.
+let seed = 20261009;
+const rand = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296);
+const G = 64, grid = [];
+for (let i = 0; i < G * G; i++) grid.push(rand());
+const smooth = t => t * t * (3 - 2 * t);
+function noise(x, y) {
+  const xi = Math.floor(x), yi = Math.floor(y), xf = smooth(x - xi), yf = smooth(y - yi);
+  const g = (a, b) => grid[((a % G + G) % G) + ((b % G + G) % G) * G];
+  const top = g(xi, yi) * (1 - xf) + g(xi + 1, yi) * xf;
+  const bottom = g(xi, yi + 1) * (1 - xf) + g(xi + 1, yi + 1) * xf;
+  return top * (1 - yf) + bottom * yf;
+}
+const fbm = (x, y) => noise(x, y) * 0.55 + noise(x * 2.1, y * 2.1) * 0.28 + noise(x * 4.3, y * 4.3) * 0.17;
+
+// The route: from the player (lower middle) round the lake to the waypoint (upper right).
+const route = [[470, 318], [560, 300], [640, 262], [700, 280], [790, 262], [860, 214], [930, 196], [1000, 170], [1060, 150]];
+function catmull(points, steps) {
+  const out = [];
+  for (let i = 0; i < points.length - 1; i++) {
+    const p0 = points[Math.max(0, i - 1)], p1 = points[i], p2 = points[i + 1], p3 = points[Math.min(points.length - 1, i + 2)];
+    for (let s = 0; s < steps; s++) {
+      const t = s / steps, t2 = t * t, t3 = t2 * t;
+      out.push([0, 1].map(k => 0.5 * ((2 * p1[k]) + (-p0[k] + p2[k]) * t + (2 * p0[k] - 5 * p1[k] + 4 * p2[k] - p3[k]) * t2 + (-p0[k] + 3 * p1[k] - 3 * p2[k] + p3[k]) * t3)));
+    }
+  }
+  out.push(points[points.length - 1]);
+  return out;
+}
+const curve = catmull(route, 40);
+const distToRoute = (x, y) => { let best = 1e9; for (const [cx, cy] of curve) best = Math.min(best, Math.hypot(x - cx, y - cy)); return best; };
+
+// Terrain, block by block.
+const pick = (list, v) => list[Math.min(list.length - 1, Math.floor(v * list.length))];
+const grass = ['#5c7d38', '#668a3e', '#71944a', '#7d9f52'];
+const forest = ['#3e5b26', '#47672c', '#4f7232'];
+const water = ['#26457a', '#2d4f87', '#365c95'];
+const shore = ['#c9b07a', '#bfa46c'];
+const path = ['#a77c4b', '#b48a57', '#9c7244'];
+const stone = ['#7f7d72', '#8b897d', '#777569'];
+const fog = ['#dcc79c', '#d4bd8f', '#cbb383', '#e2cfa6'];
+for (let by = 0; by < H; by += B) {
+  for (let bx = 0; bx < W; bx += B) {
+    const x = bx + B / 2, y = by + B / 2;
+    const detail = noise(x / 23, y / 23), speck = rand(), onRoute = distToRoute(x, y);
+    let n = fbm(x / 170, y / 170) + 0.03;
+    // The route is walkable: land along it (it goes round the water, as the mod's routes do).
+    if (onRoute < 46) n = Math.max(n, 0.4 + (46 - onRoute) / 400);
+    let colour;
+    if (n < 0.36) colour = pick(water, detail);
+    else if (n < 0.395) colour = pick(shore, speck);
+    else if (n > 0.66) colour = pick(stone, detail);
+    else if (n > 0.57) colour = pick(forest, detail);
+    else colour = pick(grass, detail * 0.7 + speck * 0.3);
+    // A dirt path under the route.
+    if (n >= 0.36 && distToRoute(x, y) < 13 + detail * 6) colour = pick(path, speck);
+    // Parchment fog round the edges, ragged in blocks, like the game's map.
+    const ex = (x - 760) / 640, ey = (y - 210) / 260;
+    const edge = Math.hypot(ex, ey) + (noise(x / 40, y / 40) - 0.5) * 0.35;
+    if (edge > 1.0) colour = pick(fog, speck);
+    else if (edge > 0.93 && speck < (edge - 0.93) / 0.07) colour = pick(fog, speck);
+    ctx.fillStyle = colour;
+    ctx.fillRect(bx, by, B, B);
+    // A little shading on each block.
+    if (speck < 0.18) { ctx.fillStyle = 'rgba(0,0,0,0.08)'; ctx.fillRect(bx, by + B - 2, B, 2); }
+  }
+}
+
+// Darken behind the title, and a soft vignette.
+let g = ctx.createLinearGradient(0, 0, 760, 0);
+g.addColorStop(0, 'rgba(20,14,6,0.86)');
+g.addColorStop(0.55, 'rgba(20,14,6,0.55)');
+g.addColorStop(1, 'rgba(20,14,6,0)');
+ctx.fillStyle = g;
+ctx.fillRect(0, 0, W, H);
+g = ctx.createRadialGradient(W * 0.62, H * 0.5, H * 0.3, W * 0.6, H * 0.5, W * 0.7);
+g.addColorStop(0, 'rgba(0,0,0,0)');
+g.addColorStop(1, 'rgba(0,0,0,0.5)');
+ctx.fillStyle = g;
+ctx.fillRect(0, 0, W, H);
+
+// The route's dots, fading in from the player.
+let along = 0, next = 14;
+for (let i = 1; i < curve.length; i++) {
+  const [x0, y0] = curve[i - 1], [x1, y1] = curve[i];
+  const len = Math.hypot(x1 - x0, y1 - y0);
+  while (along + len >= next) {
+    const t = (next - along) / len, x = x0 + (x1 - x0) * t, y = y0 + (y1 - y0) * t;
+    const alpha = Math.min(1, next / 80);
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = '#1d150a';
+    ctx.beginPath(); ctx.arc(x, y, 7.5, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#ffd24a';
+    ctx.beginPath(); ctx.arc(x, y, 5, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 1;
+    next += 26;
+  }
+  along += len;
+}
+
+// The player: a white arrow pointing along the route.
+ctx.save();
+ctx.translate(470, 318);
+ctx.rotate(Math.atan2(300 - 318, 560 - 470) + Math.PI / 2);
+ctx.fillStyle = '#1d150a';
+ctx.beginPath(); ctx.moveTo(0, -20); ctx.lineTo(15, 14); ctx.lineTo(0, 6); ctx.lineTo(-15, 14); ctx.closePath(); ctx.fill();
+ctx.fillStyle = '#ffffff';
+ctx.beginPath(); ctx.moveTo(0, -14); ctx.lineTo(10, 9); ctx.lineTo(0, 3); ctx.lineTo(-10, 9); ctx.closePath(); ctx.fill();
+ctx.restore();
+
+// The waypoint: a glow, rings, and the diamond.
+const wx = 1060, wy = 150;
+g = ctx.createRadialGradient(wx, wy, 6, wx, wy, 120);
+g.addColorStop(0, 'rgba(255,214,90,0.55)');
+g.addColorStop(1, 'rgba(255,214,90,0)');
+ctx.fillStyle = g;
+ctx.beginPath(); ctx.arc(wx, wy, 120, 0, Math.PI * 2); ctx.fill();
+for (const [r, a] of [[64, 0.5], [86, 0.25]]) {
+  ctx.strokeStyle = `rgba(255,224,130,${a})`;
+  ctx.lineWidth = 4;
+  ctx.beginPath(); ctx.arc(wx, wy, r, 0, Math.PI * 2); ctx.stroke();
+}
+function diamond(cx, cy, r) { ctx.beginPath(); ctx.moveTo(cx, cy - r); ctx.lineTo(cx + r, cy); ctx.lineTo(cx, cy + r); ctx.lineTo(cx - r, cy); ctx.closePath(); }
+ctx.fillStyle = '#1d150a'; diamond(wx, wy, 50); ctx.fill();
+ctx.fillStyle = '#ffd24a'; diamond(wx, wy, 41); ctx.fill();
+ctx.fillStyle = '#1d150a'; diamond(wx, wy, 20); ctx.fill();
+ctx.fillStyle = '#7a5a14'; diamond(wx, wy, 12); ctx.fill();
+// Its distance, like in game (once the pixel font has loaded: canvas text doesn't wait for it).
+document.fonts.load("700 26px 'Pixelify Sans'").then(() => {
+  ctx.font = "700 26px 'Pixelify Sans', monospace";
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#1d150a';
+  ctx.fillText('240 m', wx + 2, wy + 88);
+  ctx.fillStyle = '#fff6dc';
+  ctx.fillText('240 m', wx, wy + 86);
+});
+</script>
+</body>
+</html>
